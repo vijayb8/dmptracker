@@ -1,0 +1,23 @@
+name: iOS validation
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify project generation
+        run: |
+          python3 scripts/generate_project.py
+          git diff --exit-code -- DMPBegleiter.xcodeproj App/Info.plist
+      - name: Test parsing and medication history
+        run: swift test
+      - name: Build iOS Simulator app
+        run: >-
+          xcodebuild -project DMPBegleiter.xcodeproj -scheme DMPBegleiter
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
