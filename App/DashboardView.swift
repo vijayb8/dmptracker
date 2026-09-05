@@ -30,31 +30,7 @@ struct DashboardView: View {
                             Button("Messwert erfassen") { add = true }.buttonStyle(.borderedProminent)
                         }
                     }
-                    ForEach(Metric.allCases) { metric in
-                        ForEach(metric.units, id: \.self) { unit in
-                            let values = store.record.measurements.filter { $0.metric == metric && $0.unit == unit }.sorted { $0.date < $1.date }
-                            if let latest = values.last {
-                                NavigationLink { MeasurementHistory(metric: metric, unit: unit) } label: {
-                                    Panel {
-                                        Text(metric.title).font(.headline)
-                                        HStack(alignment: .firstTextBaseline) {
-                                            Text(latest.value.formatted(.number.precision(.fractionLength(0...2)))).font(.system(.largeTitle, design: .rounded).bold())
-                                            Text(unit).foregroundStyle(.secondary)
-                                            Spacer()
-                                            Image(systemName: "chevron.right").foregroundStyle(.secondary)
-                                        }
-                                        if values.count > 1 {
-                                            Chart(values) { item in
-                                                LineMark(x: .value("Datum", item.date), y: .value(unit, item.value))
-                                                PointMark(x: .value("Datum", item.date), y: .value(unit, item.value))
-                                            }.foregroundStyle(.teal).frame(height: 110).chartYScale(domain: .automatic(includesZero: false))
-                                        }
-                                        Text("Zuletzt: \(latest.date.formatted(date: .abbreviated, time: .omitted)) · \(values.count) Messwerte").font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }.buttonStyle(.plain)
-                            }
-                        }
-                    }
+                    MeasurementCards()
                     if !store.record.profile.goals.isEmpty {
                         Panel { Label("Mit der Praxis vereinbart", systemImage: "target").font(.headline); Text(store.record.profile.goals) }
                     }
@@ -63,6 +39,57 @@ struct DashboardView: View {
             }.background(Color(.systemGroupedBackground)).navigationTitle("Übersicht").navigationBarTitleDisplayMode(.inline)
                 .toolbar { Button { add = true } label: { Label("Messwert hinzufügen", systemImage: "plus") } }
                 .sheet(isPresented: $add) { MeasurementEditor() }
+        }
+    }
+}
+private struct MeasurementSeries: Identifiable {
+    let metric: Metric
+    let unit: String
+    let values: [Measurement]
+    var id: String { metric.rawValue + unit }
+}
+private struct MeasurementCards: View {
+    @EnvironmentObject var store: HealthStore
+    private var series: [MeasurementSeries] {
+        var result: [MeasurementSeries] = []
+        for metric in Metric.allCases {
+            for unit in metric.units {
+                let values = store.record.measurements.filter { $0.metric == metric && $0.unit == unit }.sorted { $0.date < $1.date }
+                if !values.isEmpty { result.append(MeasurementSeries(metric: metric, unit: unit, values: values)) }
+            }
+        }
+        return result
+    }
+    var body: some View {
+        ForEach(series) { item in
+            NavigationLink {
+                MeasurementHistory(metric: item.metric, unit: item.unit)
+            } label: {
+                MeasurementCard(series: item)
+            }.buttonStyle(.plain)
+        }
+    }
+}
+private struct MeasurementCard: View {
+    let series: MeasurementSeries
+    var body: some View {
+        Panel {
+            if let latest = series.values.last {
+                Text(series.metric.title).font(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(latest.value.formatted(.number.precision(.fractionLength(0...2)))).font(.system(.largeTitle, design: .rounded).bold())
+                    Text(series.unit).foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                }
+                if series.values.count > 1 {
+                    Chart(series.values) { item in
+                        LineMark(x: .value("Datum", item.date), y: .value(series.unit, item.value))
+                        PointMark(x: .value("Datum", item.date), y: .value(series.unit, item.value))
+                    }.foregroundStyle(.teal).frame(height: 110).chartYScale(domain: .automatic(includesZero: false))
+                }
+                Text("Zuletzt: \(latest.date.formatted(date: .abbreviated, time: .omitted)) · \(series.values.count) Messwerte").font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }
